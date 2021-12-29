@@ -57,100 +57,6 @@ display(dbutils.fs.ls(bronzePath))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Land More Raw Data
-# MAGIC 
-# MAGIC Before we get started with this lab, let's land some more raw data.
-# MAGIC 
-# MAGIC In a production setting, we might have data coming in every
-# MAGIC hour. Here we are simulating this with the function
-# MAGIC `ingest_classic_data`.
-# MAGIC 
-# MAGIC 😎 Recall that we did this in the notebook `00_ingest_raw`.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC **EXERCISE:** Land ten hours using the utility function, `ingest_classic_data`.
-
-# COMMAND ----------
-
-# ANSWER
-ingest_classic_data(hours=10)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Current Delta Architecture
-# MAGIC Next, we demonstrate everything we have built up to this point in our
-# MAGIC Delta Architecture.
-# MAGIC 
-# MAGIC We do so not with the ad hoc queries as written before, but now with
-# MAGIC composable functions included in the file `classic/includes/main/python/operations`.
-# MAGIC You should check this file for the correct arguments to use in the next
-# MAGIC three steps.
-# MAGIC 
-# MAGIC 🤔 You can refer to `plus/02_bronze_to_silver` if you are stuck.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 1: Create the `rawDF` DataFrame
-# MAGIC 
-# MAGIC **Exercise:** Use the function `read_batch_raw` to ingest the newly arrived
-# MAGIC data.
-
-# COMMAND ----------
-
-# ANSWER
-rawDF = read_batch_raw(rawPath)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 2: Transform the Raw Data
-# MAGIC 
-# MAGIC **Exercise:** Use the function `transform_raw` to ingest the newly arrived
-# MAGIC data.
-
-# COMMAND ----------
-
-# ANSWER
-transformedRawDF = transform_raw(rawDF)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Verify the Schema with an Assertion
-# MAGIC 
-# MAGIC The DataFrame `transformedRawDF` should now have the following schema:
-# MAGIC 
-# MAGIC ```
-# MAGIC datasource: string
-# MAGIC ingesttime: timestamp
-# MAGIC status: string
-# MAGIC value: string
-# MAGIC p_ingestdate: date
-# MAGIC ```
-
-# COMMAND ----------
-
-from pyspark.sql.types import *
-
-assert transformedRawDF.schema == StructType(
-    [
-        StructField("datasource", StringType(), False),
-        StructField("ingesttime", TimestampType(), False),
-        StructField("status", StringType(), False),
-        StructField("value", StringType(), True),
-        StructField("p_ingestdate", DateType(), False),
-    ]
-)
-print("Assertion passed.")
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ### Step 3: Write Batch to a Bronze Table
 # MAGIC 
 # MAGIC **Exercise:** Use the function `batch_writer` to ingest the newly arrived
@@ -163,26 +69,6 @@ print("Assertion passed.")
 
 # COMMAND ----------
 
-# ANSWER
-rawToBronzeWriter = batch_writer(
-    dataframe=transformedRawDF, partition_column="p_ingestdate"
-)
-
-rawToBronzeWriter.save(bronzePath)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Purge Raw File Path
-# MAGIC 
-# MAGIC Manually purge the raw files that have already been loaded.
-
-# COMMAND ----------
-
-dbutils.fs.rm(rawPath, recurse=True)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## Display the Bronze Table
 # MAGIC 
@@ -191,7 +77,7 @@ dbutils.fs.rm(rawPath, recurse=True)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SELECT * FROM health_tracker_classic_bronze
+# MAGIC SELECT * FROM movie_bronze
 
 # COMMAND ----------
 
@@ -222,7 +108,11 @@ dbutils.fs.rm(silverPath, recurse=True)
 
 # ANSWER
 
-bronzeDF = spark.read.table("health_tracker_classic_bronze").filter("status = 'new'")
+bronzeDF = spark.read.table("movie_bronze").filter("status = 'new'")
+
+# COMMAND ----------
+
+bronzeDF.count()
 
 # COMMAND ----------
 
@@ -244,13 +134,25 @@ bronzeDF = spark.read.table("health_tracker_classic_bronze").filter("status = 'n
 from pyspark.sql.functions import from_json
 
 json_schema = """
-    time TIMESTAMP,
-    name STRING,
-    device_id STRING,
-    steps INTEGER,
-    day INTEGER,
-    month INTEGER,
-    hour INTEGER
+   BackdropUrl STRING,
+    Budget STRING,
+    CreatedBy STRING,
+    CreatedDate STRING,
+    Id STRING,
+    ImdbUrl STRING,
+    OriginalLanguage STRING,
+    Overview STRING,
+    PosterUrl STRING,
+    Price STRING,
+    ReleaseDate STRING,
+    Revenue STRING,
+    RunTime STRING,
+    Tagline STRING,
+    Title STRING,
+    TmdbUrl STRING,
+    UpdatedBy STRING,
+    UpdatedDate STRING,
+    genres STRING
 """
 
 bronzeAugmentedDF = bronzeDF.withColumn(
@@ -272,7 +174,7 @@ bronzeAugmentedDF = bronzeDF.withColumn(
 # COMMAND ----------
 
 # ANSWER
-silver_health_tracker = bronzeAugmentedDF.select("value", "nested_json.*")
+silver_movie = bronzeAugmentedDF.select("value", "nested_json.*")
 
 # COMMAND ----------
 
@@ -283,13 +185,25 @@ silver_health_tracker = bronzeAugmentedDF.select("value", "nested_json.*")
 # MAGIC 
 # MAGIC ```
 # MAGIC value: string
-# MAGIC time: timestamp
-# MAGIC name: string
-# MAGIC device_id: string
-# MAGIC steps: integer
-# MAGIC day: integer
-# MAGIC month: integer
-# MAGIC hour: integer
+# MAGIC BackdropUrl:string
+# MAGIC Budget:string
+# MAGIC CreatedBy:string
+# MAGIC CreatedDate:string
+# MAGIC Id:string
+# MAGIC ImdbUrl:string
+# MAGIC OriginalLanguage:string
+# MAGIC Overview:string
+# MAGIC PosterUrl:string
+# MAGIC Price:string
+# MAGIC ReleaseDate:string
+# MAGIC Revenue:string
+# MAGIC RunTime:string
+# MAGIC Tagline:string
+# MAGIC Title:string
+# MAGIC TmdbUrl:string
+# MAGIC UpdatedBy:string
+# MAGIC UpdatedDate:string
+# MAGIC genres:string
 # MAGIC ```
 # MAGIC 
 # MAGIC 💪🏼 Remember, the function `_parse_datatype_string` converts a DDL format schema string into a Spark schema.
@@ -298,16 +212,28 @@ silver_health_tracker = bronzeAugmentedDF.select("value", "nested_json.*")
 
 from pyspark.sql.types import _parse_datatype_string
 
-assert silver_health_tracker.schema == _parse_datatype_string(
+assert silver_movie.schema == _parse_datatype_string(
     """
   value STRING,
-  time TIMESTAMP,
-  name STRING,
-  device_id STRING,
-  steps INTEGER,
-  day INTEGER,
-  month INTEGER,
-  hour INTEGER
+  BackdropUrl STRING,
+  Budget STRING,
+  CreatedBy STRING,
+  CreatedDate STRING,
+  Id STRING,
+  ImdbUrl STRING,
+  OriginalLanguage STRING,
+  Overview STRING,
+  PosterUrl STRING,
+  Price STRING,
+  ReleaseDate STRING,
+  Revenue STRING,
+  RunTime STRING,
+  Tagline STRING,
+  Title STRING,
+  TmdbUrl STRING,  
+  UpdatedBy STRING,
+  UpdatedDate STRING,
+  genres STRING
 """
 )
 print("Assertion passed.")
@@ -339,13 +265,27 @@ print("Assertion passed.")
 # ANSWER
 from pyspark.sql.functions import col
 
-silver_health_tracker = silver_health_tracker.select(
+silver_movie = silver_movie.select(
     "value",
-    col("device_id").cast("integer").alias("device_id"),
-    "steps",
-    col("time").alias("eventtime"),
-    "name",
-    col("time").cast("date").alias("p_eventdate"),
+    "BackdropUrl",
+    "Budget",
+    "CreatedBy",
+    col("CreatedDate").cast("date"),
+    col("Id").cast("integer").alias("movie_id"),
+    "ImdbUrl",
+    "OriginalLanguage",
+    "Overview",
+    "PosterUrl",
+    "Price",
+    col("ReleaseDate").cast("date"),
+    "Revenue",
+    "RunTime",
+    "Tagline",
+    "Title",
+    "TmdbUrl",
+    "UpdatedBy",
+    "UpdatedDate",
+    "genres",
 )
 
 # COMMAND ----------
@@ -369,16 +309,30 @@ silver_health_tracker = silver_health_tracker.select(
 
 from pyspark.sql.types import _parse_datatype_string
 
-assert silver_health_tracker.schema == _parse_datatype_string(
+assert silver_movie.schema == _parse_datatype_string(
     """
   value STRING,
-  device_id INTEGER,
-  steps INTEGER,
-  eventtime TIMESTAMP,
-  name STRING,
-  p_eventdate DATE
+  BackdropUrl STRING,
+  Budget STRING,
+  CreatedBy STRING,
+  CreatedDate DATE,
+  movie_id INTEGER,
+  ImdbUrl STRING,
+  OriginalLanguage STRING,
+  Overview STRING,
+  PosterUrl STRING,
+  Price STRING,
+  ReleaseDate Date,
+  Revenue STRING,
+  RunTime STRING,
+  Tagline STRING,
+  Title STRING,
+  TmdbUrl STRING,  
+  UpdatedBy STRING,
+  UpdatedDate STRING,
+  genres STRING
 """
-), "Schemas do not match"
+)
 print("Assertion passed.")
 
 # COMMAND ----------
@@ -401,11 +355,11 @@ print("Assertion passed.")
 
 # COMMAND ----------
 
-silver_health_tracker.count()
+silver_movie.count()
 
 # COMMAND ----------
 
-silver_health_tracker.na.drop().count()
+silver_movie.na.drop().count()
 
 # COMMAND ----------
 
@@ -414,8 +368,8 @@ silver_health_tracker.na.drop().count()
 
 # COMMAND ----------
 
-silver_health_tracker_clean = silver_health_tracker.filter("device_id IS NOT NULL")
-silver_health_tracker_quarantine = silver_health_tracker.filter("device_id IS NULL")
+silver_movie_clean = silver_movie.filter("Runtime >= 0" and "Budget >= 1000000")
+silver_movie_quarantine = silver_movie.filter("Budget < 1000000") or ("Runtime < 0")
 
 # COMMAND ----------
 
@@ -424,7 +378,15 @@ silver_health_tracker_quarantine = silver_health_tracker.filter("device_id IS NU
 
 # COMMAND ----------
 
-display(silver_health_tracker_quarantine)
+display(silver_movie_quarantine)
+
+# COMMAND ----------
+
+silver_movie_clean.count()
+
+# COMMAND ----------
+
+silver_movie_quarantine.count()
 
 # COMMAND ----------
 
@@ -442,13 +404,30 @@ display(silver_health_tracker_quarantine)
 
 # ANSWER
 (
-    silver_health_tracker_clean.select(
-        "device_id", "steps", "eventtime", "name", "p_eventdate"
+  silver_movie_clean.select(
+    "BackdropUrl",
+    "Budget",
+    "CreatedBy",
+    "CreatedDate",
+    "movie_id",
+    "ImdbUrl",
+    "OriginalLanguage",
+    "Overview",
+    "PosterUrl",
+    "Price",
+    "ReleaseDate",
+    "Revenue",
+    "RunTime",
+    "Tagline",
+    "Title",
+    "TmdbUrl",
+    "UpdatedBy",
+    "UpdatedDate"
     )
-    .write.format("delta")
-    .mode("append")
-    .partitionBy("p_eventdate")
-    .save(silverPath)
+  .write.format("delta")
+  .mode("append")
+  .partitionBy("CreatedDate")
+  .save(silverPath)  
 )
 
 # COMMAND ----------
