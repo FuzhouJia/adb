@@ -135,7 +135,7 @@ from pyspark.sql.functions import from_json
 
 json_schema = """
    BackdropUrl STRING,
-    Budget STRING,
+    Budget Double,
     CreatedBy STRING,
     CreatedDate STRING,
     Id STRING,
@@ -146,7 +146,7 @@ json_schema = """
     Price STRING,
     ReleaseDate STRING,
     Revenue STRING,
-    RunTime STRING,
+    RunTime LONG,
     Tagline STRING,
     Title STRING,
     TmdbUrl STRING,
@@ -216,7 +216,7 @@ assert silver_movie.schema == _parse_datatype_string(
     """
   value STRING,
   BackdropUrl STRING,
-  Budget STRING,
+  Budget DOUBLE,
   CreatedBy STRING,
   CreatedDate STRING,
   Id STRING,
@@ -227,7 +227,7 @@ assert silver_movie.schema == _parse_datatype_string(
   Price STRING,
   ReleaseDate STRING,
   Revenue STRING,
-  RunTime STRING,
+  RunTime LONG,
   Tagline STRING,
   Title STRING,
   TmdbUrl STRING,  
@@ -313,7 +313,7 @@ assert silver_movie.schema == _parse_datatype_string(
     """
   value STRING,
   BackdropUrl STRING,
-  Budget STRING,
+  Budget DOUBLE,
   CreatedBy STRING,
   CreatedDate DATE,
   movie_id INTEGER,
@@ -324,7 +324,7 @@ assert silver_movie.schema == _parse_datatype_string(
   Price STRING,
   ReleaseDate Date,
   Revenue STRING,
-  RunTime STRING,
+  RunTime LONG,
   Tagline STRING,
   Title STRING,
   TmdbUrl STRING,  
@@ -363,13 +363,22 @@ silver_movie.na.drop().count()
 
 # COMMAND ----------
 
+silver_movie=silver_movie.drop_duplicates()
+
+# COMMAND ----------
+
+silver_movie.count()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### Split the Silver DataFrame
 
 # COMMAND ----------
 
-silver_movie_clean = silver_movie.filter("Runtime >= 0" and "Budget >= 1000000")
-silver_movie_quarantine = silver_movie.filter("Budget < 1000000") or ("Runtime < 0")
+silver_movie_clean = silver_movie.filter("RunTime>=0"and  "Budget>=1000000" )
+silver_movie_quarantine = silver_movie.filter("Budget < 1000000") or ("RunTime < 0")
+
 
 # COMMAND ----------
 
@@ -422,7 +431,8 @@ silver_movie_quarantine.count()
     "Title",
     "TmdbUrl",
     "UpdatedBy",
-    "UpdatedDate"
+    "UpdatedDate",
+    "Genres"
     )
   .write.format("delta")
   .mode("append")
@@ -434,13 +444,13 @@ silver_movie_quarantine.count()
 
 spark.sql(
     """
-DROP TABLE IF EXISTS health_tracker_classic_silver
+DROP TABLE IF EXISTS movieall_silver
 """
 )
 
 spark.sql(
     f"""
-CREATE TABLE health_tracker_classic_silver
+CREATE TABLE movieall_silver
 USING DELTA
 LOCATION "{silverPath}"
 """
@@ -453,13 +463,27 @@ LOCATION "{silverPath}"
 
 # COMMAND ----------
 
-silverTable = spark.read.table("health_tracker_classic_silver")
+silverTable = spark.read.table("movieall_silver")
 expected_schema = """
-  device_id INTEGER,
-  steps INTEGER,
-  eventtime TIMESTAMP,
-  name STRING,
-  p_eventdate DATE
+  BackdropUrl STRING,
+  Budget DOUBLE,
+  CreatedBy STRING,
+  CreatedDate DATE,
+  movie_id INTEGER,
+  ImdbUrl STRING,
+  OriginalLanguage STRING,
+  Overview STRING,
+  PosterUrl STRING,
+  Price STRING,
+  ReleaseDate Date,
+  Revenue STRING,
+  RunTime LONG,
+  Tagline STRING,
+  Title STRING,
+  TmdbUrl STRING,  
+  UpdatedBy STRING,
+  UpdatedDate STRING,
+  genres STRING
 """
 
 assert silverTable.schema == _parse_datatype_string(
@@ -471,7 +495,7 @@ print("Assertion passed.")
 
 # MAGIC %sql
 # MAGIC 
-# MAGIC SELECT * FROM health_tracker_classic_silver
+# MAGIC SELECT * FROM movieall_silver
 
 # COMMAND ----------
 
@@ -489,11 +513,15 @@ print("Assertion passed.")
 
 # COMMAND ----------
 
+display(silver_movie_clean)
+
+# COMMAND ----------
+
 # ANSWER
 from delta.tables import DeltaTable
 
 bronzeTable = DeltaTable.forPath(spark, bronzePath)
-silverAugmented = silver_health_tracker_clean.withColumn("status", lit("loaded"))
+silverAugmented = silver_movie_clean.withColumn("status", lit("loaded"))
 
 update_match = "bronze.value = clean.value"
 update = {"status": "clean.status"}
@@ -519,7 +547,7 @@ update = {"status": "clean.status"}
 # COMMAND ----------
 
 # ANSWER
-silverAugmented = silver_health_tracker_quarantine.withColumn(
+silverAugmented = silver_movie_quarantine.withColumn(
     "status", lit("quarantined")
 )
 
