@@ -58,3 +58,29 @@ def untilStreamIsReady(namedStream: str, progressions: int = 3) -> bool:
     print("The stream {} is active and ready.".format(namedStream))
     return True
 
+
+# COMMAND ----------
+
+##from operation cmd1
+from delta.tables import DeltaTable
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import (
+    col,
+    current_timestamp,
+    from_json,
+    from_unixtime,
+    lag,
+    lead,
+    lit,
+    mean,
+    stddev,
+    max,
+)
+from typing import List
+from pyspark.sql.session import SparkSession
+from pyspark.sql.window import Window
+
+# COMMAND ----------
+
+def ingest_batch_raw(Path: str) -> DataFrame:
+    return spark.read.format("json").option("multiline", "true").option("inferSchema", "true").load(Path)

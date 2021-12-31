@@ -49,12 +49,7 @@
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Land More Raw Data
-
-# COMMAND ----------
-
-ingest_classic_data(hours=10)
+# MAGIC %run ./includes/utilities
 
 # COMMAND ----------
 
@@ -70,10 +65,16 @@ ingest_classic_data(hours=10)
 
 # COMMAND ----------
 
-rawDF = read_batch_raw(rawPath)
-transformedRawDF = transform_raw(rawDF)
+ingest_classic_data()
+kafka_schema = "value STRING"
+
+raw_movie_df = (
+    spark.read.format("text").schema(kafka_schema).load(rawPath)
+)
+
+transformedRawDF = transform_raw(raw_movie_df)##operation cmd9, change to the same as rtb cmd14
 rawToBronzeWriter = batch_writer(
-    dataframe=transformedRawDF, partition_column="p_ingestdate"
+    dataframe=transformedRawDF, partition_column="ingestdate"
 )
 
 rawToBronzeWriter.save(bronzePath)
@@ -88,7 +89,7 @@ rawToBronzeWriter.save(bronzePath)
 # COMMAND ----------
 
 # ANSWER
-dbutils.fs.rm(rawPath, recurse=True)
+#dbutils.fs.rm(rawPath, recurse=True)
 
 # COMMAND ----------
 
@@ -114,6 +115,14 @@ dbutils.fs.rm(rawPath, recurse=True)
 
 # COMMAND ----------
 
+bronzeDF = (
+  spark.read
+  .table("movie_bronze")
+  .filter("status = 'new'")
+)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ♨️ After updating the `read_batch_bronze` function, re-source the
 # MAGIC `includes/main/python/operations` file to include your updates by running the cell below.
@@ -124,15 +133,22 @@ dbutils.fs.rm(rawPath, recurse=True)
 
 # COMMAND ----------
 
-bronzeDF = read_batch_bronze(spark)
 transformedBronzeDF = transform_bronze(bronzeDF)
 
 (silverCleanDF, silverQuarantineDF) = generate_clean_and_quarantine_dataframes(
     transformedBronzeDF
 )
 
+
+
+# COMMAND ----------
+
+ # silverQuarantineDF=silverQuarantineDF.dropDuplicates()#为什么这个不行，需要在cmd20function家dropdup，operation10;
+
+# COMMAND ----------
+
 bronzeToSilverWriter = batch_writer(
-    dataframe=silverCleanDF, partition_column="p_eventdate", exclude_columns=["value"]
+    dataframe=silverCleanDF, partition_column="UpdatedDate", exclude_columns=["value"]
 )
 bronzeToSilverWriter.save(silverPath)
 
@@ -147,7 +163,7 @@ update_bronze_table_status(spark, bronzePath, silverQuarantineDF, "quarantined")
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SELECT * FROM health_tracker_classic_silver
+# MAGIC SELECT * FROM movie_bronze -- 为什么shigetable，
 
 # COMMAND ----------
 
@@ -170,7 +186,7 @@ update_bronze_table_status(spark, bronzePath, silverQuarantineDF, "quarantined")
 
 # ANSWER
 
-bronzeQuarantinedDF = spark.read.table("health_tracker_classic_bronze").filter(
+bronzeQuarantinedDF = spark.read.table("movie_bronze").filter(
     "status = 'quarantined'"
 )
 display(bronzeQuarantinedDF)
@@ -192,35 +208,17 @@ display(bronzeQuarTransDF)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Step 3: Join Quarantined Data with User Data
+# MAGIC ### Step 3: fix runtime with absolute value of the orginal negative value, and change the budget to 1 million
 # MAGIC 
 # MAGIC We do this to retrieve the correct device id associated with each user.
 
 # COMMAND ----------
 
-health_tracker_user_df = spark.read.table("health_tracker_user").alias("user")
-repairDF = bronzeQuarTransDF.join(
-    health_tracker_user_df,
-    bronzeQuarTransDF.device_id == health_tracker_user_df.user_id,
-)
-display(repairDF)
+from pyspark.sql.functions import abs, when
 
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 4: Select the Correct Device from the Joined `user` DataFrame
-
-# COMMAND ----------
-
-silverCleanedDF = repairDF.select(
-    col("quarantine.value").alias("value"),
-    col("user.device_id").cast("INTEGER").alias("device_id"),
-    col("quarantine.steps").alias("steps"),
-    col("quarantine.eventtime").alias("eventtime"),
-    col("quarantine.name").alias("name"),
-    col("quarantine.eventtime").cast("date").alias("p_eventdate"),
-)
-display(silverCleanedDF)
+silverCleanedDF_1 = transform_bronze(bronzeQuarTransDF,True)
+  
+display(silverCleanedDF_1)
 
 # COMMAND ----------
 
@@ -233,11 +231,11 @@ display(silverCleanedDF)
 # COMMAND ----------
 
 bronzeToSilverWriter = batch_writer(
-    dataframe=silverCleanedDF, partition_column="p_eventdate", exclude_columns=["value"]
+    dataframe=silverCleanedDF_1, partition_column="UpdatedDate", exclude_columns=["value"]
 )
 bronzeToSilverWriter.save(silverPath)
 
-update_bronze_table_status(spark, bronzePath, silverCleanedDF, "loaded")
+update_bronze_table_status(spark, bronzePath, silverCleanedDF_1, "loaded")
 
 # COMMAND ----------
 
@@ -251,6 +249,10 @@ update_bronze_table_status(spark, bronzePath, silverCleanedDF, "loaded")
 
 display(bronzeQuarantinedDF)
 
+
+# COMMAND ----------
+
+display(silverCleanedDF_1)
 
 # COMMAND ----------
 

@@ -196,6 +196,7 @@ LOCATION "{bronzePath}"
 
 # COMMAND ----------
 
+##为了不重新导入，暂时删
 dbutils.fs.rm(rawPath, recurse=True)
 
 

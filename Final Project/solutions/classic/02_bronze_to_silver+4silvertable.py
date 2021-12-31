@@ -442,6 +442,10 @@ silver_movie_quarantine.count()
 
 # COMMAND ----------
 
+silver_movie_clean.display()
+
+# COMMAND ----------
+
 spark.sql(
     """
 DROP TABLE IF EXISTS movieall_silver
@@ -496,6 +500,167 @@ print("Assertion passed.")
 # MAGIC %sql
 # MAGIC 
 # MAGIC SELECT * FROM movieall_silver
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC generate silver movie data
+
+# COMMAND ----------
+
+(
+  silver_movie_clean.select(
+    "BackdropUrl",
+    "Budget",
+    "CreatedBy",
+    "CreatedDate",
+    "movie_id",
+    "ImdbUrl",
+    "OriginalLanguage",
+    "Overview",
+    "PosterUrl",
+    "Price",
+    "ReleaseDate",
+    "Revenue",
+    "RunTime",
+    "Tagline",
+    "Title",
+    "TmdbUrl",
+    "UpdatedBy",
+    "UpdatedDate"
+    )
+  .write.format("delta")
+  .mode("append")
+  .partitionBy("CreatedDate")
+  .save(moviePath)  
+)
+
+# COMMAND ----------
+
+## genre df
+from pyspark.sql.functions import *
+file_path = [file.path for file in dbutils.fs.ls("/FileStore/") if "movie_" in file.path]
+raw_df1 = (spark.read
+         .option("multiline", "true")
+          .option("inferSchema", "true")
+         .format("json")
+         .load(file_path)).select(explode("movie").alias("movies"))
+silver_genres = raw_df1.select("movies.genres","movies.id","movies")
+silver_genres = silver_genres.select("movies","id",explode("genres").alias("myGenres"))
+silver_genres = silver_genres.select("movies",col("id").alias("movie_id"),col("myGenres.id").alias("genres_id"),"myGenres.name")
+silver_genres = silver_genres.dropDuplicates().na.drop()
+display(silver_genres)
+
+
+# COMMAND ----------
+
+silver_genres.write.format("delta").mode("append").save(genresPath)  
+#genresTosilverWriter=batch_writer(dataframe=silver_genres,exclude_columns=["Movies"],) 没有patrition
+#genresToSilverWriter.save(f"{genresPath}")
+
+
+# COMMAND ----------
+
+#originallanguage df, 从没有split的选
+silver_originallanguages = silver_movie.select("movie_id","Title", "OriginalLanguage")
+silver_originallanguages = silver_originallanguages.dropDuplicates()
+display(silver_originallanguages)
+
+# COMMAND ----------
+
+silver_originallanguages.write.format("delta").mode("append").save(OriginalLanguagePath)  
+
+# COMMAND ----------
+
+#movie genres table
+movie_df = silver_movie.select("movie_id", "value")
+silver_movie_genres = movie_df.join(silver_genres, silver_genres.movie_id == movie_df.movie_id).select(movie_df.movie_id, silver_genres.genres_id)
+silver_movie_genres.dropDuplicates()
+silver_movie_genres.count()
+display(silver_movie_genres)
+
+# COMMAND ----------
+
+silver_movie_genres.write.format("delta").mode("append").save(movie_genres_Path)  
+
+# COMMAND ----------
+
+spark.sql(
+    """
+DROP TABLE IF EXISTS movie_silver
+"""
+)
+
+spark.sql(
+    f"""
+CREATE TABLE movie_silver
+USING DELTA
+LOCATION "{moviePath}"
+"""
+)
+
+# COMMAND ----------
+
+# MAGIC  %sql
+# MAGIC SELECT * FROM movie_silver order by movie_id 
+
+# COMMAND ----------
+
+spark.sql(
+    """
+DROP TABLE IF EXISTS genre_silver
+"""
+)
+
+spark.sql(
+    f"""
+CREATE TABLE genre_silver
+USING DELTA
+LOCATION "{genresPath}"
+"""
+)
+
+# COMMAND ----------
+
+# MAGIC  %sql
+# MAGIC SELECT * FROM genre_silver order by movie_id 
+
+# COMMAND ----------
+
+spark.sql(
+    """
+DROP TABLE IF EXISTS OriginalLanguage_silver
+"""
+)
+
+spark.sql(
+    f"""
+CREATE TABLE OriginalLanguage_silver
+USING DELTA
+LOCATION "{OriginalLanguagePath}"
+"""
+)
+
+# COMMAND ----------
+
+# MAGIC  %sql
+# MAGIC SELECT * FROM OriginalLanguage_silver order by movie_id 
+
+# COMMAND ----------
+
+spark.sql(
+    """
+DROP TABLE IF EXISTS movie_genres_silver
+"""
+)
+
+spark.sql(
+    f"""
+CREATE TABLE movie_genres_silver
+USING DELTA
+LOCATION "{movie_genres_Path}"
+"""
+)
 
 # COMMAND ----------
 

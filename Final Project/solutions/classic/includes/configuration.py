@@ -19,6 +19,12 @@ silverPath = classicPipelinePath + "silver/"
 silverQuarantinePath = classicPipelinePath + "silverQuarantine/"
 goldPath = classicPipelinePath + "gold/"
 
+rawData= [file.path for file in dbutils.fs.ls("dbfs:/dbacademy/Fuzhou_jia/Movies/classic/raw/")]
+moviePath= classicPipelinePath+ "movieSilver/"
+genresPath= classicPipelinePath+ "genresSilver/"
+OriginalLanguagePath=classicPipelinePath+"originalLanguageSilver/"
+movie_genres_Path=classicPipelinePath+"movieGenresSilver/"
+
 # COMMAND ----------
 
 # MAGIC %md

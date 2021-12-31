@@ -46,10 +46,6 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./includes/user
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ## Make Notebook Idempotent
 
